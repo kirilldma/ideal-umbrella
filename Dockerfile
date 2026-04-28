@@ -27,11 +27,8 @@ RUN apt-get update && apt-get install -y \
     nodejs npm \
     && rm -rf /var/lib/apt/lists/*
 
-RUN apt-get update && apt-get install -y gnupg && \
-    curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg | gpg --dearmor -o /usr/share/keyrings/cloudflare-main.gpg && \
-    echo "deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared trixie main" > /etc/apt/sources.list.d/cloudflared.list && \
-    apt-get update && apt-get install -y cloudflared && \
-    rm -rf /var/lib/apt/lists/*
+RUN curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o /usr/local/bin/cloudflared && \
+    chmod +x /usr/local/bin/cloudflared
 
 RUN echo 'root:root' | chpasswd && \
     sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config && \
