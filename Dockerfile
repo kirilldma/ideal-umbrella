@@ -1,6 +1,13 @@
 FROM debian:trixie-slim
 
 ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y \
+    locales \
+    && sed -i 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen \
+    && locale-gen \
+    && rm -rf /var/lib/apt/lists/*
+
 ENV LANG=en_US.UTF-8
 ENV LC_ALL=en_US.UTF-8
 
@@ -8,7 +15,6 @@ RUN apt-get update && apt-get install -y \
     systemd systemd-sysv \
     openssh-server \
     curl wget \
-    locales \
     btop htop \
     net-tools iproute2 iputils-ping \
     vim nano \
@@ -16,34 +22,39 @@ RUN apt-get update && apt-get install -y \
     sudo \
     procps \
     ca-certificates \
-    unzip zip \
-    tar \
+    unzip zip tar \
     python3 python3-pip \
     nodejs npm \
-    ufw \
     && rm -rf /var/lib/apt/lists/*
-
-RUN locale-gen en_US.UTF-8 && update-locale LANG=en_US.UTF-8
-
-RUN echo 'root:root' | chpasswd && \
-    sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config && \
-    sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config && \
-    sed -i 's/PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config
 
 RUN curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg | gpg --dearmor -o /usr/share/keyrings/cloudflare-main.gpg && \
     echo "deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared trixie main" > /etc/apt/sources.list.d/cloudflared.list && \
     apt-get update && apt-get install -y cloudflared && \
     rm -rf /var/lib/apt/lists/*
 
-RUN cat > /etc/motd << 'EOF'
-    ___                           __       __        
-   /   |  _________  ____ ___  __/ /______/ /____  __
-  / /| | / ___/ __ \/ __ `/ / / / __/ ___/ //_/ / / /
- / ___ |/ /  / / / / /_/ / /_/ / /_(__  ) ,< / /_/ / 
-/_/  |_/_/  /_/ /_/\__,_/\__,_/\__/____/_/|_|\__, /  
-                                            /____/      
+RUN echo 'root:root' | chpasswd && \
+    sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config && \
+    sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config && \
+    sed -i 's/PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config && \
+    mkdir -p /run/sshd
 
-   Arnautsky.mom VPS | BETA
+RUN cat > /etc/profile.d/arnautsky.sh << 'EOF'
+export LANG=en_US.UTF-8
+export LC_ALL=en_US.UTF-8
+alias ll='ls -la'
+alias ports='ss -tlnp'
+alias myip='curl -s ifconfig.me'
+EOF
+
+RUN cat > /etc/motd << 'EOF'
+
+  █████╗ ██████╗ ███╗   ██╗ █████╗ ██╗   ██╗████████╗███████╗██╗  ██╗██╗   ██╗
+ ██╔══██╗██╔══██╗████╗  ██║██╔══██╗██║   ██║╚══██╔══╝██╔════╝██║ ██╔╝╚██╗ ██╔╝
+ ███████║██████╔╝██╔██╗ ██║███████║██║   ██║   ██║   ███████╗█████╔╝  ╚████╔╝ 
+ ██╔══██║██╔══██╗██║╚██╗██║██╔══██║██║   ██║   ██║   ╚════██║██╔═██╗   ╚██╔╝  
+ ██║  ██║██║  ██║██║ ╚████║██║  ██║╚██████╔╝   ██║   ███████║██║  ██╗   ██║   
+ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝╚═╝  ╚═╝ ╚═════╝    ╚═╝   ╚══════╝╚═╝  ╚═╝   ╚═╝  
+                                                          arnautsky.mom
 EOF
 
 COPY entrypoint.sh /entrypoint.sh
