@@ -60,3 +60,8 @@ RUN chmod +x /entrypoint.sh
 
 STOPSIGNAL SIGRTMIN+3
 CMD ["/entrypoint.sh"]
+
+RUN echo '#!/bin/bash\nkill -SIGRTMIN+3 1' > /usr/local/bin/reboot && \
+    chmod +x /usr/local/bin/reboot && \
+    echo '#!/bin/bash\nkill -SIGRTMIN+3 1' > /usr/local/bin/shutdown && \
+    chmod +x /usr/local/bin/shutdown
