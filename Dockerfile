@@ -1,18 +1,17 @@
-FROM debian:bookworm
+FROM debian:bookworm-slim
 
-ENV DEBIAN_FRONTEND=noninteractive
+ENV DEBIAN_FRONTEND=noninteractive \
+    LANG=en_US.UTF-8 \
+    LC_ALL=en_US.UTF-8 \
+    container=docker
 
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     locales \
     && sed -i 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen \
     && locale-gen \
     && rm -rf /var/lib/apt/lists/*
 
-ENV LANG=en_US.UTF-8
-ENV LC_ALL=en_US.UTF-8
-
-RUN apt-get update && apt-get install -y \
-    systemd systemd-sysv \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     openssh-server \
     curl wget \
     btop htop \
@@ -24,17 +23,47 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     unzip zip tar \
     python3 python3-pip \
-    nodejs npm \
+    iptables \
+    fuse-overlayfs \
+    kmod \
     && rm -rf /var/lib/apt/lists/*
 
-RUN curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o /usr/local/bin/cloudflared && \
-    chmod +x /usr/local/bin/cloudflared
+# Node.js 22 LTS
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y nodejs \
+    && rm -rf /var/lib/apt/lists/*
 
-RUN echo 'root:root' | chpasswd && \
-    sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config && \
-    sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config && \
-    sed -i 's/PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config && \
-    mkdir -p /run/sshd
+# Docker CE
+RUN curl -fsSL https://get.docker.com | sh
+
+# cloudflared
+RUN curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 \
+    -o /usr/local/bin/cloudflared \
+    && chmod +x /usr/local/bin/cloudflared
+
+# SSH
+RUN echo 'root:arnautsky' | chpasswd \
+    && mkdir -p /run/sshd \
+    && sed -i \
+        -e 's/#PermitRootLogin.*/PermitRootLogin yes/' \
+        -e 's/#PasswordAuthentication.*/PasswordAuthentication yes/' \
+        -e 's/PasswordAuthentication no/PasswordAuthentication yes/' \
+        -e 's/#Port 22/Port 22/' \
+        /etc/ssh/sshd_config
+
+# Docker rootless fallback config
+RUN mkdir -p /etc/docker && cat > /etc/docker/daemon.json << 'EOF'
+{
+  "storage-driver": "fuse-overlayfs",
+  "iptables": false,
+  "bridge": "none",
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "10m",
+    "max-file": "3"
+  }
+}
+EOF
 
 RUN cat > /etc/profile.d/arnautsky.sh << 'EOF'
 export LANG=en_US.UTF-8
@@ -42,26 +71,26 @@ export LC_ALL=en_US.UTF-8
 alias ll='ls -la'
 alias ports='ss -tlnp'
 alias myip='curl -s ifconfig.me'
+alias dps='docker ps'
+alias dlog='docker logs -f'
 EOF
 
 RUN cat > /etc/motd << 'EOF'
-
   █████╗ ██████╗ ███╗   ██╗ █████╗ ██╗   ██╗████████╗███████╗██╗  ██╗██╗   ██╗
  ██╔══██╗██╔══██╗████╗  ██║██╔══██╗██║   ██║╚══██╔══╝██╔════╝██║ ██╔╝╚██╗ ██╔╝
  ███████║██████╔╝██╔██╗ ██║███████║██║   ██║   ██║   ███████╗█████╔╝  ╚████╔╝ 
  ██╔══██║██╔══██╗██║╚██╗██║██╔══██║██║   ██║   ██║   ╚════██║██╔═██╗   ╚██╔╝  
  ██║  ██║██║  ██║██║ ╚████║██║  ██║╚██████╔╝   ██║   ███████║██║  ██╗   ██║   
  ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝╚═╝  ╚═╝ ╚═════╝    ╚═╝   ╚══════╝╚═╝  ╚═╝   ╚═╝  
-                                                          arnautsky.mom
+                                                           arnautsky.mom
+  Docker: $(docker --version 2>/dev/null | cut -d' ' -f3 | tr -d ',')
+  IP:     $(curl -s ifconfig.me 2>/dev/null)
 EOF
 
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-STOPSIGNAL SIGRTMIN+3
-CMD ["/entrypoint.sh"]
+EXPOSE 22
 
-RUN echo '#!/bin/bash\nkill -SIGRTMIN+3 1' > /usr/local/bin/reboot && \
-    chmod +x /usr/local/bin/reboot && \
-    echo '#!/bin/bash\nkill -SIGRTMIN+3 1' > /usr/local/bin/shutdown && \
-    chmod +x /usr/local/bin/shutdown
+STOPSIGNAL SIGTERM
+CMD ["/entrypoint.sh"]
